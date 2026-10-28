@@ -3,7 +3,9 @@ import { Modal } from './Modal'
 import { uid, useStore } from '../lib/store'
 import { deleteTask, upsertTask } from '../lib/tasks'
 import { isDateOnly } from '../lib/dates'
-import type { Priority, Task } from '../lib/types'
+import type { Energy, Priority, Task } from '../lib/types'
+
+export const ENERGY_ICONS: Record<Energy, string> = { low: '🔋', medium: '🔋🔋', high: '⚡' }
 
 export function newTask(partial: Partial<Task> = {}): Task {
   return {
@@ -23,6 +25,15 @@ export function TaskModal({ task, onClose }: { task: Task; onClose: () => void }
   const isNew = !data.tasks.some((t) => t.id === task.id)
   const [draft, setDraft] = useState(task)
   const [timed, setTimed] = useState(!!task.due && !isDateOnly(task.due))
+  const [newStep, setNewStep] = useState('')
+  const steps = draft.subtasks ?? []
+
+  const addStep = () => {
+    const title = newStep.trim()
+    if (!title) return
+    set('subtasks', [...steps, { id: uid(), title, done: false }])
+    setNewStep('')
+  }
 
   const set = <K extends keyof Task>(key: K, value: Task[K]) => setDraft((d) => ({ ...d, [key]: value }))
 
@@ -96,6 +107,49 @@ export function TaskModal({ task, onClose }: { task: Task; onClose: () => void }
               ))}
             </select>
           </label>
+        </div>
+        <label>
+          Energy needed
+          <div className="segmented">
+            {(['low', 'medium', 'high'] as Energy[]).map((e) => (
+              <button
+                type="button"
+                key={e}
+                className={draft.energy === e ? 'selected' : ''}
+                onClick={() => set('energy', draft.energy === e ? undefined : e)}
+              >
+                {ENERGY_ICONS[e]} {e}
+              </button>
+            ))}
+          </div>
+        </label>
+        <div className="steps-editor">
+          <span className="label">Break it into tiny steps</span>
+          {steps.map((step) => (
+            <div key={step.id} className="step">
+              <input
+                type="checkbox"
+                checked={step.done}
+                onChange={() => set('subtasks', steps.map((x) => (x.id === step.id ? { ...x, done: !x.done } : x)))}
+              />
+              <span className={step.done ? 'done' : ''}>{step.title}</span>
+              <button type="button" className="icon-btn" onClick={() => set('subtasks', steps.filter((x) => x.id !== step.id))}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <input
+            className="small-input"
+            placeholder="+ Add a step (Enter)"
+            value={newStep}
+            onChange={(e) => setNewStep(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                addStep()
+              }
+            }}
+          />
         </div>
         <textarea placeholder="Notes" rows={3} value={draft.notes ?? ''} onChange={(e) => set('notes', e.target.value)} />
         <div className="modal-actions">

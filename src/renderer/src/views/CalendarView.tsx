@@ -13,11 +13,15 @@ import { EventModal, newEvent } from '../components/EventModal'
 import { TaskModal, newTask } from '../components/TaskModal'
 import { TaskRow } from '../components/TaskRow'
 import { Modal } from '../components/Modal'
-import type { CalendarEvent, Task } from '../lib/types'
+import type { Bill, CalendarEvent, Task } from '../lib/types'
+import { billOccurrences } from '../lib/recurrence'
+import { formatMoney, toggleBillPaid } from '../lib/bills'
+import { BillModal } from '../components/BillModal'
 
 const TASK_PREFIX = 'task:'
+const BILL_PREFIX = 'bill:'
 
-type Editing = { kind: 'event'; item: CalendarEvent } | { kind: 'task'; item: Task } | null
+type Editing = { kind: 'event'; item: CalendarEvent } | { kind: 'task'; item: Task } | { kind: 'bill'; item: Bill } | null
 
 // Our model stores an all-day end date inclusively (what people type); FullCalendar's is exclusive.
 const toFcEnd = (ev: CalendarEvent) =>
@@ -31,6 +35,7 @@ export function CalendarView() {
   const [editing, setEditing] = useState<Editing>(null)
   const [choosing, setChoosing] = useState<{ start: string; end?: string; allDay: boolean } | null>(null)
   const unscheduledRef = useRef<HTMLDivElement>(null)
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null)
 
   const unscheduled = useMemo(() => sortTasks(data.tasks.filter((t) => !t.done && !t.due)), [data.tasks])
 
@@ -61,8 +66,19 @@ export function CalendarView() {
           extendedProps: { task: t }
         }
       })
-    return [...events, ...tasks]
-  }, [data.events, data.tasks])
+    const bills: EventInput[] = range
+      ? billOccurrences(data.bills, range.from, range.to).map((o) => ({
+          id: `${BILL_PREFIX}${o.bill.id}@${o.due}`,
+          title: `💵 ${o.bill.name} ${formatMoney(o.bill.amount, data.settings.currency)}`,
+          start: o.due,
+          allDay: true,
+          editable: false,
+          classNames: ['fc-bill', o.paid ? 'fc-bill-paid' : ''],
+          extendedProps: { bill: o.bill, due: o.due, paid: o.paid }
+        }))
+      : []
+    return [...events, ...tasks, ...bills]
+  }, [data.events, data.tasks, data.bills, data.settings.currency, range])
 
   // Let unscheduled to-dos be dragged from the side panel onto the calendar.
   useEffect(() => {
@@ -100,7 +116,9 @@ export function CalendarView() {
   }
 
   const onEventClick = (info: EventClickArg) => {
-    if (info.event.id.startsWith(TASK_PREFIX)) {
+    if (info.event.id.startsWith(BILL_PREFIX)) {
+      setEditing({ kind: 'bill', item: info.event.extendedProps.bill as Bill })
+    } else if (info.event.id.startsWith(TASK_PREFIX)) {
       setEditing({ kind: 'task', item: info.event.extendedProps.task as Task })
     } else {
       const ev = data.events.find((e) => e.id === info.event.id)
@@ -118,6 +136,22 @@ export function CalendarView() {
   }
 
   const renderEvent = (arg: EventContentArg) => {
+    const { bill, due, paid } = arg.event.extendedProps as { bill?: Bill; due?: string; paid?: boolean }
+    if (bill && due) {
+      return (
+        <div className="fc-task-content">
+          <input
+            type="checkbox"
+            checked={!!paid}
+            title="Paid"
+            onClick={(e) => e.stopPropagation()}
+            onChange={() => update((d) => toggleBillPaid(d, bill.id, due))}
+            aria-label={`Mark ${bill.name} paid`}
+          />
+          <span>{arg.event.title}</span>
+        </div>
+      )
+    }
     const task = arg.event.extendedProps.task as Task | undefined
     if (!task) return true // default rendering for regular events
     return (
@@ -164,6 +198,7 @@ export function CalendarView() {
           eventDrop={onEventChange}
           eventResize={onEventChange}
           select={onSelect}
+          datesSet={(info) => setRange({ from: toDateKey(info.start), to: toDateKey(info.end) })}
           drop={(info) => {
             const id = info.draggedEl.dataset.taskId
             const due = fromFcStart(info.date, info.allDay)
@@ -216,6 +251,7 @@ export function CalendarView() {
         </Modal>
       )}
       {editing?.kind === 'event' && <EventModal event={editing.item} onClose={() => setEditing(null)} />}
+      {editing?.kind === 'bill' && <BillModal bill={editing.item} onClose={() => setEditing(null)} />}
       {editing?.kind === 'task' && <TaskModal task={editing.item} onClose={() => setEditing(null)} />}
     </div>
   )

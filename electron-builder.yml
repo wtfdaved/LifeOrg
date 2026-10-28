@@ -1,15 +1,40 @@
 appId: com.lifeorg.app
 productName: LifeOrg
+artifactName: LifeOrg-${version}-${os}-${arch}.${ext}
 directories:
   output: dist
+  buildResources: build
 files:
   - out/**
   - package.json
+publish: null
+
 win:
-  target: nsis
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  # A normal "Next, Next, Install" wizard that installs just for the current user (no admin needed).
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: LifeOrg
+
 mac:
-  target: dmg
   category: public.app-category.productivity
+  # Ad-hoc signed ("-"), not with a paid Apple certificate: macOS asks once to "Open Anyway" (see README).
+  identity: '-'
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+
 linux:
-  target: AppImage
   category: Office
+  maintainer: LifeOrg
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]

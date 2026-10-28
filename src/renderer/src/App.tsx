@@ -10,6 +10,11 @@ import { MoodView } from './views/MoodView'
 import { PagesView } from './views/PagesView'
 import { SettingsView } from './views/SettingsView'
 import { useColorScheme } from './lib/theme'
+import { ChoresView } from './views/ChoresView'
+import { BillsView } from './views/BillsView'
+import { CheckInView } from './views/CheckInView'
+import { FocusProvider, FocusTimer } from './components/FocusTimer'
+import { todayKey } from './lib/dates'
 
 export function App() {
   const [data, setData] = useState<AppData | null>(null)
@@ -37,8 +42,11 @@ export function App() {
 
 const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'today', label: 'Today', icon: '☀️' },
+  { id: 'checkin', label: 'Morning check-in', icon: '🧭' },
   { id: 'calendar', label: 'Calendar', icon: '📅' },
   { id: 'tasks', label: 'To-dos', icon: '✅' },
+  { id: 'chores', label: 'Chores & routines', icon: '🧹' },
+  { id: 'bills', label: 'Bills', icon: '💵' },
   { id: 'mood', label: 'Mood', icon: '🌈' },
   { id: 'pages', label: 'Whiteboard', icon: '📝' },
   { id: 'settings', label: 'Settings', icon: '⚙️' }
@@ -46,8 +54,12 @@ const NAV: { id: View; label: string; icon: string }[] = [
 
 function Shell({ onLocked }: { onLocked: () => void }) {
   const { data, saveState, flush } = useStore()
-  const [view, setView] = useState<View>('today')
+  // Mornings open straight into the check-in until it's done for the day.
+  const [view, setView] = useState<View>(() =>
+    !data.daily[todayKey()]?.checkedInAt && new Date().getHours() < 12 ? 'checkin' : 'today'
+  )
   const [openPageId, setOpenPageId] = useState<string | null>(null)
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(null)
   const scheme = useColorScheme(data.settings.theme)
 
   const lock = useCallback(async () => {
@@ -79,6 +91,7 @@ function Shell({ onLocked }: { onLocked: () => void }) {
   }
 
   return (
+    <FocusProvider value={setFocusTaskId}>
     <div className="shell" data-scheme={scheme}>
       <nav className="sidebar">
         <div className="brand">
@@ -92,6 +105,7 @@ function Shell({ onLocked }: { onLocked: () => void }) {
           >
             <span className="nav-icon">{item.icon}</span>
             {item.label}
+            {item.id === 'checkin' && !data.daily[todayKey()]?.checkedInAt && <span className="nav-dot" title="Not done yet today" />}
           </button>
         ))}
         <div className="sidebar-footer">
@@ -106,12 +120,17 @@ function Shell({ onLocked }: { onLocked: () => void }) {
       </nav>
       <main className="content">
         {view === 'today' && <TodayView onNavigate={setView} onOpenPage={openPage} />}
+        {view === 'checkin' && <CheckInView onNavigate={setView} />}
         {view === 'calendar' && <CalendarView />}
+        {view === 'chores' && <ChoresView />}
+        {view === 'bills' && <BillsView />}
         {view === 'tasks' && <TasksView />}
         {view === 'mood' && <MoodView />}
         {view === 'pages' && <PagesView openPageId={openPageId} onOpenPage={setOpenPageId} scheme={scheme} />}
         {view === 'settings' && <SettingsView />}
       </main>
+      {focusTaskId && <FocusTimer taskId={focusTaskId} onClose={() => setFocusTaskId(null)} />}
     </div>
+    </FocusProvider>
   )
 }

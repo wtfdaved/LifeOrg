@@ -60,6 +60,14 @@ export function SettingsView() {
           </select>
         </label>
         <label>
+          Currency for bills
+          <select value={data.settings.currency} onChange={(e) => set('currency', e.target.value)}>
+            {['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'NZD', 'JPY', 'INR', 'MXN', 'BRL', 'ZAR', 'CHF', 'SEK'].map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <label>
           Auto-lock after inactivity
           <select value={data.settings.autoLockMinutes} onChange={(e) => set('autoLockMinutes', Number(e.target.value))}>
             {[1, 5, 15, 30, 60].map((m) => (
